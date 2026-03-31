@@ -1,18 +1,14 @@
 package com.example.flight_booking_backend.service;
 
 import com.example.flight_booking_backend.model.Booking;
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import tools.jackson.databind.ObjectMapper;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.format.DateTimeFormatter;
 
 import static com.example.flight_booking_backend.email.EmailComponents.*;
@@ -21,66 +17,75 @@ import static com.example.flight_booking_backend.email.EmailPalette.*;
 @Service
 public class EmailService {
 
-    @Autowired
-    private JavaMailSender mailSender;
+    @Value("${resend.api.key}")
+    private String resendApiKey;
 
-    @Value("${spring.mail.username}")
+    @Value("${resend.from.email}")
     private String fromEmail;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy  hh:mm a");
+    private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    private void sendEmail(String to, String Subject, String html) {
+        try {
+            String jsonBody = """
+                    {
+                        "from": "%s",
+                        "to": ["%s"],
+                        "subject": "%s",
+                        "html": "%s"
+                    }
+                    """.formatted(fromEmail, to, Subject, html.replace("\"", "\\\"").replace("\n", ""));
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.resend.com/email"))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + resendApiKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                System.out.println("Email sent successfully to: " + to);
+            } else {
+                System.err.println(
+                        "Failed to send email. Status: " + response.statusCode() + ", Body: " + response.body());
+            }
+
+        } catch (Exception e) {
+            System.err.println("Failed to send email: " + e.getMessage());
+        }
+    }
 
     @Async
-    public void sendBookingConfirmation(Booking booking) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(booking.getUser().getEmail());
-            helper.setFrom(fromEmail);
-            helper.setSubject(IC_PLANE + " Booking Confirmed — Flight "
-                    + booking.getFlight().getFlightNumber());
-            helper.setText(buildOneWayHtml(booking), true);
-
-            mailSender.send(message);
-            System.out.println("Confirmation email sent to: " + booking.getUser().getEmail());
-
-        } catch (MessagingException e) {
-            System.err.println("Failed to send confirmation email: " + e.getMessage());
-        }
+    public void sendVerificationCode(String toEmail, String name, String code) {
+        String html = buildVerificationHtml(name, code);
+        sendEmail(toEmail, IC_PLANE + "Verify your AeroLink account", html);
+        System.out.println("Verification code sent to: " + toEmail);
     }
 
     @Async
     public void sendResetEmail(String toEmail, String token) {
-        String link = "http://localhost:5173/reset-password?token=" + token;
+        String link = "https://flight-booking-frontend-hgml.vercel.app/reset-password?token=" + token;
+        String html = "<p>Click the link to reset your password:</p><a href='" + link + "'>" + link + "</a>";
+        sendEmail(toEmail, IC_PLANE + " Password Reset Request", html);
+        System.out.println("Password reset email sent to: " + toEmail);
+    }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(toEmail);
-        message.setSubject("Password Reset Request");
-        message.setText("Click the link to reset your password:\n" + link);
-
-        mailSender.send(message);
+    @Async
+    public void sendBookingConfirmation(Booking booking) {
+        sendEmail(booking.getUser().getEmail(),
+                IC_PLANE + " Booking Confirmed — Flight " + booking.getFlight().getFlightNumber(),
+                buildOneWayHtml(booking));
+        System.out.println("Booking confirmation email sent to: " + booking.getUser().getEmail());
     }
 
     @Async
     public void sendRoundTripConfirmation(Booking outbound, Booking returnBooking) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(outbound.getUser().getEmail());
-            helper.setFrom(fromEmail);
-            helper.setSubject(IC_PLANE + " Round Trip Confirmed — "
-                    + outbound.getFlight().getFlightNumber()
-                    + " & " + returnBooking.getFlight().getFlightNumber());
-            helper.setText(buildRoundTripHtml(outbound, returnBooking), true);
-
-            mailSender.send(message);
-            System.out.println("Round trip confirmation email sent to: "
-                    + outbound.getUser().getEmail());
-
-        } catch (MessagingException e) {
-            System.err.println("Failed to send round trip confirmation email: " + e.getMessage());
-        }
+        sendEmail(outbound.getUser().getEmail(),
+                IC_PLANE + " Round Trip Confirmed — "
+                        + outbound.getFlight().getFlightNumber()
+                        + " & " + returnBooking.getFlight().getFlightNumber(),
+                buildRoundTripHtml(outbound, returnBooking));
+        System.out.println("Round trip confirmation email sent to: " + outbound.getUser().getEmail());
     }
 
     private String buildOneWayHtml(Booking booking) {
@@ -223,25 +228,6 @@ public class EmailService {
 
     private static String fmt(String s) {
         return s;
-    }
-
-    @Async
-    public void sendVerificationCode(String toEmail, String name, String code) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-            helper.setTo(toEmail);
-            helper.setFrom(fromEmail);
-            helper.setSubject(IC_PLANE + "Verify your AeroLink account");
-            helper.setText(buildVerificationHtml(name, code), true);
-
-            mailSender.send(message);
-            System.out.println("Verification code sent to: " + toEmail);
-
-        } catch (MessagingException e) {
-            System.err.println("Failed to send verification email: " + e.getMessage());
-        }
     }
 
     private String buildVerificationHtml(String name, String code) {
