@@ -67,7 +67,7 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(
                 List.of("http://localhost:5173", "https://flightbookingbackend-production-0eec.up.railway.app",
-                        "https://flight-booking-frontend-vert.vercel.app"));
+                        "https://flight-booking-frontend-dusky.vercel.app"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
