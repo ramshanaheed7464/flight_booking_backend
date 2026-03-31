@@ -17,32 +17,46 @@ import static com.example.flight_booking_backend.email.EmailPalette.*;
 @Service
 public class EmailService {
 
-    @Value("${resend.api.key}")
-    private String resendApiKey;
+    @Value("${brevo.api.key}")
+    private String brevoApiKey;
 
-    @Value("${resend.from.email}")
+    @Value("${brevo.from.email}")
     private String fromEmail;
+
+    @Value("${brevo.from.name:aerolink}")
+    private String fromName;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy  hh:mm a");
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    private void sendEmail(String to, String Subject, String html) {
+    private void sendEmail(String to, String subject, String html) {
         try {
             String jsonBody = """
                     {
-                        "from": "%s",
-                        "to": ["%s"],
+                        "sender": { "name": "%s", "email": "%s" },
+                        "to": [ { "email": "%s" } ],
                         "subject": "%s",
-                        "html": "%s"
+                        "htmlContent": "%s"
                     }
-                    """.formatted(fromEmail, to, Subject, html.replace("\"", "\\\"").replace("\n", ""));
+                    """.formatted(
+                    fromName,
+                    fromEmail,
+                    to,
+                    subject.replace("\"", "\\\""),
+                    html.replace("\\", "\\\\")
+                            .replace("\"", "\\\"")
+                            .replace("\n", "")
+                            .replace("\r", ""));
+
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://api.resend.com/email"))
+                    .uri(URI.create("https://api.brevo.com/v3/smtp/email"))
                     .header("Content-Type", "application/json")
-                    .header("Authorization", "Bearer " + resendApiKey)
+                    .header("api-key", brevoApiKey)
                     .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                     .build();
+
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 System.out.println("Email sent successfully to: " + to);
             } else {
@@ -57,8 +71,9 @@ public class EmailService {
 
     @Async
     public void sendVerificationCode(String toEmail, String name, String code) {
+        String subject = IC_PLANE + " Verify your AeroLink account";
         String html = buildVerificationHtml(name, code);
-        sendEmail(toEmail, IC_PLANE + "Verify your AeroLink account", html);
+        sendEmail(toEmail, subject, html);
         System.out.println("Verification code sent to: " + toEmail);
     }
 
@@ -72,20 +87,60 @@ public class EmailService {
 
     @Async
     public void sendBookingConfirmation(Booking booking) {
-        sendEmail(booking.getUser().getEmail(),
-                IC_PLANE + " Booking Confirmed — Flight " + booking.getFlight().getFlightNumber(),
-                buildOneWayHtml(booking));
+        String subject = IC_PLANE + " Booking Confirmed — Flight " + booking.getFlight().getFlightNumber();
+        String html = buildOneWayHtml(booking);
+
+        sendEmail(
+                booking.getUser().getEmail(),
+                subject,
+                html);
         System.out.println("Booking confirmation email sent to: " + booking.getUser().getEmail());
     }
 
     @Async
     public void sendRoundTripConfirmation(Booking outbound, Booking returnBooking) {
-        sendEmail(outbound.getUser().getEmail(),
-                IC_PLANE + " Round Trip Confirmed — "
-                        + outbound.getFlight().getFlightNumber()
-                        + " & " + returnBooking.getFlight().getFlightNumber(),
-                buildRoundTripHtml(outbound, returnBooking));
+        String subject = IC_PLANE + " Round Trip Confirmed — "
+                + outbound.getFlight().getFlightNumber()
+                + " & " + returnBooking.getFlight().getFlightNumber();
+        String html = buildRoundTripHtml(outbound, returnBooking);
+
+        sendEmail(
+                outbound.getUser().getEmail(),
+                subject,
+                html);
         System.out.println("Round trip confirmation email sent to: " + outbound.getUser().getEmail());
+    }
+
+    // ── HTML builders ───────────────────────────────────────────────────────
+
+    private String buildVerificationHtml(String name, String code) {
+        String body = header("Verify Your Email", "One last step before you take off") +
+                greeting(name, "Thanks for signing up. Enter the code below to verify your email address.") +
+
+                "<div style='padding:32px;text-align:center;'>" +
+
+                "<p style='font-size:13px;color:" + MUTED + ";margin-bottom:16px;text-transform:uppercase;" +
+                "letter-spacing:2px;'>Your verification code</p>" +
+
+                "<div style='display:inline-block;background:" + CARD + ";border:1px solid " + BORDER + ";" +
+                "border-radius:12px;padding:20px 48px;margin-bottom:16px;'>" +
+                "<span style='font-family:monospace;font-size:36px;font-weight:700;letter-spacing:12px;color:" + GOLD
+                + ";'>"
+                + code + "</span>" +
+                "</div>" +
+
+                "<p style='font-size:12px;color:" + MUTED + ";margin-top:8px;'>" +
+                "This code expires in <strong style='color:" + BLACK + ";'>15 minutes</strong>." +
+                "</p>" +
+
+                "<p style='font-size:12px;color:" + MUTED + ";margin-top:8px;'>" +
+                "If you did not create an account, you can safely ignore this email." +
+                "</p>" +
+                "</div>" +
+
+                footer();
+
+        return wrapper(body);
     }
 
     private String buildOneWayHtml(Booking booking) {
@@ -158,8 +213,7 @@ public class EmailService {
                         fmt(outFlight.getArrivalTime() != null
                                 ? outFlight.getArrivalTime().format(FORMATTER)
                                 : "N/A"))
-                +
-                "</table></div>" +
+                + "</table></div>" +
 
                 "<div style='padding:20px 32px 0;'>" +
                 sectionTitle("&#8617; Return Flight &mdash; Booking #" + returnBooking.getId()) +
@@ -171,8 +225,7 @@ public class EmailService {
                         fmt(retFlight.getArrivalTime() != null
                                 ? retFlight.getArrivalTime().format(FORMATTER)
                                 : "N/A"))
-                +
-                "</table></div>" +
+                + "</table></div>" +
 
                 buildPassengerSection(outbound.getPassengerDetails()) +
                 footer();
@@ -228,35 +281,5 @@ public class EmailService {
 
     private static String fmt(String s) {
         return s;
-    }
-
-    private String buildVerificationHtml(String name, String code) {
-        String body = header("Verify Your Email", "One last step before you take off") +
-                greeting(name, "Thanks for signing up. Enter the code below to verify your email address.") +
-
-                "<div style='padding:32px;text-align:center;'>" +
-
-                "<p style='font-size:13px;color:" + MUTED + ";margin-bottom:16px;text-transform:uppercase;" +
-                "letter-spacing:2px;'>Your verification code</p>" +
-
-                "<div style='display:inline-block;background:" + CARD + ";border:1px solid " + BORDER + ";" +
-                "border-radius:12px;padding:20px 48px;margin-bottom:16px;'>" +
-                "<span style='font-family:monospace;font-size:36px;font-weight:700;letter-spacing:12px;color:" + GOLD
-                + ";'>"
-                + code + "</span>" +
-                "</div>" +
-
-                "<p style='font-size:12px;color:" + MUTED + ";margin-top:8px;'>" +
-                "This code expires in <strong style='color:" + BLACK + ";'>15 minutes</strong>." +
-                "</p>" +
-
-                "<p style='font-size:12px;color:" + MUTED + ";margin-top:8px;'>" +
-                "If you did not create an account, you can safely ignore this email." +
-                "</p>" +
-                "</div>" +
-
-                footer();
-
-        return wrapper(body);
     }
 }
