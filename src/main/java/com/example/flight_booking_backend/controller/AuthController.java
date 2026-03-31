@@ -47,12 +47,18 @@ public class AuthController {
 
         if (email.isBlank() || password.isBlank() || name.isBlank())
             return ResponseEntity.badRequest().body("Name, email and password are required.");
-        if (userRepository.existsByEmail(email))
-            return ResponseEntity.badRequest().body("Email already exists");
+        userRepository.findByEmail(email).ifPresent(u -> {
+            if (u.isVerified())
+                throw new RuntimeException("Email verified but already exists.");
+        });
 
+        User existing = userRepository.findByEmail(email).orElse(null);
+        if (existing != null && !existing.isVerified())
+            return ResponseEntity.badRequest().body(
+                    "Email already registered but not verified. Please check your email for the verification code or request a new one.");
         String code = generateCode();
 
-        User user = new User();
+        User user = (existing != null) ? existing : new User();
         user.setName(name);
         user.setEmail(email);
         user.setPassword(passwordEncoder.encode(password));
