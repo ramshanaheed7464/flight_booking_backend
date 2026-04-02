@@ -50,8 +50,8 @@ public class Flight {
             // String cabinClass,
             // String layover, String stopovers,
             String baggageAllowance, String inFlightEntertainment,
-            String wifiAvailability, String seatType, String mealsIncluded, boolean refundable,
-            boolean isEntertainmentAvailable) {
+            Boolean wifiAvailability, String seatType, Boolean mealsIncluded, Boolean refundable,
+            Boolean isEntertainmentAvailable) {
         this.flightNumber = flightNumber;
         this.airline = airline;
         this.source = source;
@@ -66,9 +66,9 @@ public class Flight {
         // this.stopovers = stopovers;
         this.baggageAllowance = baggageAllowance;
         this.inFlightEntertainment = inFlightEntertainment;
-        this.wifiAvailability = false; // default; use setter after construction
+        this.wifiAvailability = wifiAvailability;
         this.seatType = seatType;
-        this.mealsIncluded = false; // default; use setter after construction
+        this.mealsIncluded = mealsIncluded;
         this.refundable = refundable;
         this.isEntertainmentAvailable = isEntertainmentAvailable;
     }
