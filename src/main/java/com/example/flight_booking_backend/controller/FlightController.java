@@ -63,8 +63,7 @@ public class FlightController {
         flight.setAirline(updated.getAirline());
         flight.setDuration(updated.getDuration());
         // flight.setCabinClass(updated.getCabinClass());
-        flight.setLayover(updated.getLayover());
-        flight.setStopovers(updated.getStopovers());
+        // flight.setStopovers(updated.getStopovers());
         flight.setBaggageAllowance(updated.getBaggageAllowance());
         flight.setEntertainmentAvailability(updated.getEntertainmentAvailability());
         flight.setInFlightEntertainment(updated.getInFlightEntertainment());

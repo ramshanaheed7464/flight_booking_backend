@@ -25,8 +25,7 @@ public class Flight {
     private Integer seatsAvailable;
     private Double price;
     // private String cabinClass;
-    private String layover;
-    private String stopovers;
+    // private String stopovers;
     private String baggageAllowance;
     private String inFlightEntertainment;
     private boolean wifiAvailability;
@@ -49,7 +48,8 @@ public class Flight {
             LocalDateTime departureTime, LocalDateTime arrivalTime, Integer duration, Integer seatsAvailable,
             Double price,
             // String cabinClass,
-            String layover, String stopovers, String baggageAllowance, String inFlightEntertainment,
+            // String layover, String stopovers,
+            String baggageAllowance, String inFlightEntertainment,
             String wifiAvailability, String seatType, String mealsIncluded, boolean refundable,
             boolean isEntertainmentAvailable) {
         this.flightNumber = flightNumber;
@@ -62,8 +62,8 @@ public class Flight {
         this.seatsAvailable = seatsAvailable;
         this.price = price;
         // this.cabinClass = cabinClass;
-        this.layover = layover;
-        this.stopovers = stopovers;
+        // this.layover = layover;
+        // this.stopovers = stopovers;
         this.baggageAllowance = baggageAllowance;
         this.inFlightEntertainment = inFlightEntertainment;
         this.wifiAvailability = false; // default; use setter after construction
@@ -169,21 +169,21 @@ public class Flight {
     // this.cabinClass = cabinClass;
     // }
 
-    public String getLayover() {
-        return layover;
-    }
+    // public String getLayover() {
+    // return layover;
+    // }
 
-    public void setLayover(String layover) {
-        this.layover = layover;
-    }
+    // public void setLayover(String layover) {
+    // this.layover = layover;
+    // }
 
-    public String getStopovers() {
-        return stopovers;
-    }
+    // public String getStopovers() {
+    // return stopovers;
+    // }
 
-    public void setStopovers(String stopovers) {
-        this.stopovers = stopovers;
-    }
+    // public void setStopovers(String stopovers) {
+    // this.stopovers = stopovers;
+    // }
 
     public String getBaggageAllowance() {
         return baggageAllowance;
