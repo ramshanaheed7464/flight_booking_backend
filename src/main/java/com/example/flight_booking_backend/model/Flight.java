@@ -28,11 +28,11 @@ public class Flight {
     // private String stopovers;
     private String baggageAllowance;
     private String inFlightEntertainment;
-    private Boolean wifiAvailability;
     private String seatType;
-    private Boolean mealsIncluded;
-    private Boolean refundable;
-    private Boolean isEntertainmentAvailable;
+    private Boolean wifiAvailability = false;
+    private Boolean mealsIncluded = false;
+    private Boolean refundable = false;
+    private Boolean isEntertainmentAvailable = false;
 
     @Column
     private String meals;
