@@ -17,7 +17,6 @@ public class Flight {
     @Column(unique = true)
     private String flightNumber;
     private String airline;
-    private String aircraft;
     private String source;
     private String destination;
     private LocalDateTime departureTime;
@@ -25,16 +24,16 @@ public class Flight {
     private Integer duration;
     private Integer seatsAvailable;
     private Double price;
-    private String cabinClass;
+    // private String cabinClass;
     private String layover;
     private String stopovers;
     private String baggageAllowance;
     private String inFlightEntertainment;
-    @JsonProperty("wifiAvailable")
     private boolean wifiAvailability;
     private String seatType;
     private boolean mealsIncluded;
     private boolean refundable;
+    private boolean isEntertainmentAvailable;
 
     @Column
     private String meals;
@@ -46,14 +45,15 @@ public class Flight {
     public Flight() {
     }
 
-    public Flight(String flightNumber, String airline, String aircraft, String source, String destination,
+    public Flight(String flightNumber, String airline, String source, String destination,
             LocalDateTime departureTime, LocalDateTime arrivalTime, Integer duration, Integer seatsAvailable,
             Double price,
-            String cabinClass, String layover, String stopovers, String baggageAllowance, String inFlightEntertainment,
-            String wifiAvailability, String seatType, String mealsIncluded, boolean refundable) {
+            // String cabinClass,
+            String layover, String stopovers, String baggageAllowance, String inFlightEntertainment,
+            String wifiAvailability, String seatType, String mealsIncluded, boolean refundable,
+            boolean isEntertainmentAvailable) {
         this.flightNumber = flightNumber;
         this.airline = airline;
-        this.aircraft = aircraft;
         this.source = source;
         this.destination = destination;
         this.departureTime = departureTime;
@@ -61,15 +61,16 @@ public class Flight {
         this.duration = duration;
         this.seatsAvailable = seatsAvailable;
         this.price = price;
-        this.cabinClass = cabinClass;
+        // this.cabinClass = cabinClass;
         this.layover = layover;
         this.stopovers = stopovers;
         this.baggageAllowance = baggageAllowance;
         this.inFlightEntertainment = inFlightEntertainment;
-        this.wifiAvailability = false;
+        this.wifiAvailability = false; // default; use setter after construction
         this.seatType = seatType;
-        this.mealsIncluded = false;
+        this.mealsIncluded = false; // default; use setter after construction
         this.refundable = refundable;
+        this.isEntertainmentAvailable = isEntertainmentAvailable;
     }
 
     public Long getId() {
@@ -94,14 +95,6 @@ public class Flight {
 
     public void setAirline(String airline) {
         this.airline = airline;
-    }
-
-    public String getAircraft() {
-        return aircraft;
-    }
-
-    public void setAircraft(String aircraft) {
-        this.aircraft = aircraft;
     }
 
     public Integer getDuration() {
@@ -168,13 +161,13 @@ public class Flight {
         this.meals = meals;
     }
 
-    public String getCabinClass() {
-        return cabinClass;
-    }
+    // public String getCabinClass() {
+    // return cabinClass;
+    // }
 
-    public void setCabinClass(String cabinClass) {
-        this.cabinClass = cabinClass;
-    }
+    // public void setCabinClass(String cabinClass) {
+    // this.cabinClass = cabinClass;
+    // }
 
     public String getLayover() {
         return layover;
@@ -208,6 +201,16 @@ public class Flight {
         this.inFlightEntertainment = inFlightEntertainment;
     }
 
+    @JsonProperty("entertainmentAvailable")
+    public boolean getEntertainmentAvailability() {
+        return isEntertainmentAvailable;
+    }
+
+    public void setEntertainmentAvailability(boolean isEntertainmentAvailable) {
+        this.isEntertainmentAvailable = isEntertainmentAvailable;
+    }
+
+    @JsonProperty("wifiAvailable")
     public boolean getWifiAvailability() {
         return wifiAvailability;
     }

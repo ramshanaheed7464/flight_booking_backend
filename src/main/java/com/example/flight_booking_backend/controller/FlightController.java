@@ -61,12 +61,12 @@ public class FlightController {
         flight.setPrice(updated.getPrice());
         flight.setMeals(updated.getMeals());
         flight.setAirline(updated.getAirline());
-        flight.setAircraft(updated.getAircraft());
         flight.setDuration(updated.getDuration());
-        flight.setCabinClass(updated.getCabinClass());
+        // flight.setCabinClass(updated.getCabinClass());
         flight.setLayover(updated.getLayover());
         flight.setStopovers(updated.getStopovers());
         flight.setBaggageAllowance(updated.getBaggageAllowance());
+        flight.setEntertainmentAvailability(updated.getEntertainmentAvailability());
         flight.setInFlightEntertainment(updated.getInFlightEntertainment());
         flight.setWifiAvailability(updated.getWifiAvailability());
         flight.setSeatType(updated.getSeatType());
@@ -76,7 +76,6 @@ public class FlightController {
         return ResponseEntity.ok("Flight updated successfully");
     }
 
-    // DELETE /api/flights/{id} — admin only
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteFlight(
             @PathVariable Long id,
