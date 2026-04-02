@@ -202,16 +202,16 @@ public class Flight {
     }
 
     @JsonProperty("entertainmentAvailable")
-    public boolean getEntertainmentAvailability() {
+    public Boolean getEntertainmentAvailability() {
         return isEntertainmentAvailable;
     }
 
-    public void setEntertainmentAvailability(boolean isEntertainmentAvailable) {
+    public void setEntertainmentAvailability(Boolean isEntertainmentAvailable) {
         this.isEntertainmentAvailable = isEntertainmentAvailable;
     }
 
     @JsonProperty("wifiAvailable")
-    public boolean getWifiAvailability() {
+    public Boolean getWifiAvailability() {
         return wifiAvailability;
     }
 
@@ -227,7 +227,7 @@ public class Flight {
         this.seatType = seatType;
     }
 
-    public boolean getMealsIncluded() {
+    public Boolean getMealsIncluded() {
         return mealsIncluded;
     }
 
@@ -235,7 +235,7 @@ public class Flight {
         this.mealsIncluded = mealsIncluded;
     }
 
-    public boolean isRefundable() {
+    public Boolean isRefundable() {
         return refundable;
     }
 
