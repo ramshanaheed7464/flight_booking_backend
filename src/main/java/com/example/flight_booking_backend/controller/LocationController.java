@@ -2,8 +2,9 @@ package com.example.flight_booking_backend.controller;
 
 import com.example.flight_booking_backend.model.City;
 import com.example.flight_booking_backend.repository.CityRepository;
-import com.example.flight_booking_backend.security.JwtUtil;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,26 +15,22 @@ import java.util.Map;
 public class LocationController {
 
     private final CityRepository cityRepo;
-    private final JwtUtil jwtUtil;
 
-    public LocationController(CityRepository cityRepo, JwtUtil jwtUtil) {
+    public LocationController(CityRepository cityRepo) {
         this.cityRepo = cityRepo;
-        this.jwtUtil = jwtUtil;
     }
 
-    // GET /api/locations/cities — public, returns all cities sorted by name
     @GetMapping("/cities")
     public ResponseEntity<List<City>> getCities() {
         return ResponseEntity.ok(cityRepo.findAllByOrderByNameAsc());
     }
 
-    // POST /api/locations/cities — admin only
     @PostMapping("/cities")
     public ResponseEntity<?> addCity(
             @RequestBody Map<String, String> body,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        if (!isAdmin(authHeader))
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied");
 
         String name = body.get("name");
@@ -45,14 +42,13 @@ public class LocationController {
         return ResponseEntity.ok(cityRepo.save(new City(name.trim())));
     }
 
-    // PUT /api/locations/cities/{id} — admin only
     @PutMapping("/cities/{id}")
     public ResponseEntity<?> updateCity(
             @PathVariable Long id,
             @RequestBody Map<String, String> body,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        if (!isAdmin(authHeader))
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied");
 
         City city = cityRepo.findById(id).orElse(null);
@@ -69,13 +65,12 @@ public class LocationController {
         return ResponseEntity.ok(cityRepo.save(city));
     }
 
-    // DELETE /api/locations/cities/{id} — admin only
     @DeleteMapping("/cities/{id}")
     public ResponseEntity<?> deleteCity(
             @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        if (!isAdmin(authHeader))
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied");
 
         if (!cityRepo.existsById(id))
@@ -85,11 +80,13 @@ public class LocationController {
         return ResponseEntity.ok("City deleted");
     }
 
-    private boolean isAdmin(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            return false;
+    private boolean isAdmin(Jwt jwt) {
         try {
-            return "ADMIN".equalsIgnoreCase(jwtUtil.extractRole(authHeader.substring(7)));
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess == null)
+                return false;
+            List<?> roles = (List<?>) realmAccess.get("roles");
+            return roles != null && roles.contains("ADMIN");
         } catch (Exception e) {
             return false;
         }

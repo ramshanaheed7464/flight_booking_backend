@@ -6,12 +6,13 @@ import com.example.flight_booking_backend.model.User;
 import com.example.flight_booking_backend.repository.BookingRepository;
 import com.example.flight_booking_backend.repository.FlightRepository;
 import com.example.flight_booking_backend.repository.UserRepository;
-import com.example.flight_booking_backend.security.JwtUtil;
 import com.example.flight_booking_backend.service.EmailService;
 
 import tools.jackson.databind.ObjectMapper;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -25,33 +26,25 @@ public class BookingController {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final FlightRepository flightRepository;
-    private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
     private final EmailService emailService;
 
     public BookingController(BookingRepository bookingRepository, UserRepository userRepository,
-            FlightRepository flightRepository, JwtUtil jwtUtil, ObjectMapper objectMapper,
+            FlightRepository flightRepository, ObjectMapper objectMapper,
             EmailService emailService) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.flightRepository = flightRepository;
-        this.jwtUtil = jwtUtil;
         this.objectMapper = objectMapper;
         this.emailService = emailService;
     }
 
-    // ── User endpoints ────────────────────────────────────────────
-
-    // POST /api/bookings
     @PostMapping
     public ResponseEntity<?> bookFlight(
             @RequestBody Map<String, Object> body,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        String email = extractEmail(authHeader);
-        if (email == null)
-            return ResponseEntity.status(401).body("Unauthorized");
-
+        String email = jwt.getClaimAsString("email");
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
@@ -60,7 +53,6 @@ public class BookingController {
         String tripType = body.getOrDefault("tripType", "ONE_WAY").toString();
         int passengers = Integer.parseInt(body.getOrDefault("passengers", "1").toString());
 
-        // Serialize passenger details to JSON string
         String passengerDetailsJson = null;
         if (body.containsKey("passengerDetails")) {
             try {
@@ -79,7 +71,6 @@ public class BookingController {
         flight.setSeatsAvailable(flight.getSeatsAvailable() - passengers);
         flightRepository.save(flight);
 
-        // Save outbound booking
         Booking booking = new Booking();
         booking.setUser(user);
         booking.setFlight(flight);
@@ -90,7 +81,6 @@ public class BookingController {
         booking.setPassengerDetails(passengerDetailsJson);
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Round trip — save return booking, then send ONE combined email
         if ("ROUND_TRIP".equals(tripType) && body.containsKey("returnFlightId")) {
             Long returnFlightId = Long.valueOf(body.get("returnFlightId").toString());
             var returnFlight = flightRepository.findById(returnFlightId).orElse(null);
@@ -118,27 +108,21 @@ public class BookingController {
         return ResponseEntity.ok("Flight booked successfully");
     }
 
-    // GET /api/bookings — current user's bookings
     @GetMapping
-    public ResponseEntity<?> getMyBookings(@RequestHeader("Authorization") String authHeader) {
-        String email = extractEmail(authHeader);
-        if (email == null)
-            return ResponseEntity.status(401).body("Unauthorized");
+    public ResponseEntity<?> getMyBookings(@AuthenticationPrincipal Jwt jwt) {
+        String email = jwt.getClaimAsString("email");
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
         return ResponseEntity.ok(bookingRepository.findByUserId(user.getId()));
     }
 
-    // PUT /api/bookings/{id}/cancel — user cancels their own booking
     @PutMapping("/{id}/cancel")
     public ResponseEntity<?> cancelBooking(
             @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        String email = extractEmail(authHeader);
-        if (email == null)
-            return ResponseEntity.status(401).body("Unauthorized");
+        String email = jwt.getClaimAsString("email");
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
@@ -160,25 +144,20 @@ public class BookingController {
         return ResponseEntity.ok("Booking cancelled");
     }
 
-    // ── Admin endpoints ───────────────────────────────────────────
-
-    // GET /api/bookings/all — all bookings (admin only)
     @GetMapping("/all")
-    public ResponseEntity<?> getAllBookings(@RequestHeader("Authorization") String authHeader) {
-        if (!isAdmin(authHeader))
+    public ResponseEntity<?> getAllBookings(@AuthenticationPrincipal Jwt jwt) {
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied: ADMIN role required");
-        List<Booking> all = bookingRepository.findAll();
-        return ResponseEntity.ok(all);
+        return ResponseEntity.ok(bookingRepository.findAll());
     }
 
-    // PUT /api/bookings/{id}/status — update booking status (admin only)
     @PutMapping("/{id}/status")
     public ResponseEntity<?> updateBookingStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        if (!isAdmin(authHeader))
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied: ADMIN role required");
 
         Booking booking = bookingRepository.findById(id).orElse(null);
@@ -192,15 +171,6 @@ public class BookingController {
         try {
             BookingStatus newStatus = BookingStatus.valueOf(statusStr.toUpperCase());
             booking.setStatus(newStatus);
-
-            // Restore seats if admin cancels an active booking
-            if (newStatus == BookingStatus.CANCELLED
-                    && booking.getStatus() != BookingStatus.CANCELLED) {
-                var flight = booking.getFlight();
-                flight.setSeatsAvailable(flight.getSeatsAvailable() + booking.getPassengers());
-                flightRepository.save(flight);
-            }
-
             bookingRepository.save(booking);
             return ResponseEntity.ok("Booking status updated to " + newStatus);
         } catch (IllegalArgumentException e) {
@@ -208,20 +178,18 @@ public class BookingController {
         }
     }
 
-    // DELETE /api/bookings/{id} — delete a booking (admin only)
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteBooking(
             @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader) {
+            @AuthenticationPrincipal Jwt jwt) {
 
-        if (!isAdmin(authHeader))
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied: ADMIN role required");
 
         Booking booking = bookingRepository.findById(id).orElse(null);
         if (booking == null)
             return ResponseEntity.badRequest().body("Booking not found");
 
-        // Restore seats if booking was active
         if (booking.getStatus() == BookingStatus.BOOKED) {
             var flight = booking.getFlight();
             flight.setSeatsAvailable(flight.getSeatsAvailable() + booking.getPassengers());
@@ -232,24 +200,13 @@ public class BookingController {
         return ResponseEntity.ok("Booking deleted");
     }
 
-    // ── Helpers ───────────────────────────────────────────────────
-
-    private String extractEmail(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            return null;
+    private boolean isAdmin(Jwt jwt) {
         try {
-            return jwtUtil.extractClaims(authHeader.substring(7)).getSubject();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private boolean isAdmin(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            return false;
-        try {
-            String role = jwtUtil.extractRole(authHeader.substring(7));
-            return "ADMIN".equalsIgnoreCase(role);
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess == null)
+                return false;
+            List<?> roles = (List<?>) realmAccess.get("roles");
+            return roles != null && roles.contains("ADMIN");
         } catch (Exception e) {
             return false;
         }

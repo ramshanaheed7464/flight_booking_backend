@@ -2,23 +2,23 @@ package com.example.flight_booking_backend.controller;
 
 import com.example.flight_booking_backend.model.Flight;
 import com.example.flight_booking_backend.repository.FlightRepository;
-import com.example.flight_booking_backend.security.JwtUtil;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/flights")
 public class FlightController {
 
     private final FlightRepository flightRepository;
-    private final JwtUtil jwtUtil;
 
-    public FlightController(FlightRepository flightRepository, JwtUtil jwtUtil) {
+    public FlightController(FlightRepository flightRepository) {
         this.flightRepository = flightRepository;
-        this.jwtUtil = jwtUtil;
     }
 
     @GetMapping
@@ -29,8 +29,8 @@ public class FlightController {
     @PostMapping("/add")
     public ResponseEntity<?> addFlight(
             @RequestBody Flight flight,
-            @RequestHeader("Authorization") String authHeader) {
-        if (!isAdmin(authHeader))
+            @AuthenticationPrincipal Jwt jwt) {
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied");
         try {
             flightRepository.save(flight);
@@ -44,8 +44,8 @@ public class FlightController {
     public ResponseEntity<?> updateFlight(
             @PathVariable Long id,
             @RequestBody Flight updated,
-            @RequestHeader("Authorization") String authHeader) {
-        if (!isAdmin(authHeader))
+            @AuthenticationPrincipal Jwt jwt) {
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied");
 
         Flight flight = flightRepository.findById(id).orElse(null);
@@ -62,8 +62,6 @@ public class FlightController {
         flight.setMeals(updated.getMeals());
         flight.setAirline(updated.getAirline());
         flight.setDuration(updated.getDuration());
-        // flight.setCabinClass(updated.getCabinClass());
-        // flight.setStopovers(updated.getStopovers());
         flight.setBaggageAllowance(updated.getBaggageAllowance());
         flight.setEntertainmentAvailability(updated.getEntertainmentAvailability());
         flight.setInFlightEntertainment(updated.getInFlightEntertainment());
@@ -78,8 +76,8 @@ public class FlightController {
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteFlight(
             @PathVariable Long id,
-            @RequestHeader("Authorization") String authHeader) {
-        if (!isAdmin(authHeader))
+            @AuthenticationPrincipal Jwt jwt) {
+        if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied");
 
         if (!flightRepository.existsById(id))
@@ -89,12 +87,13 @@ public class FlightController {
         return ResponseEntity.ok("Flight deleted successfully");
     }
 
-    private boolean isAdmin(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            return false;
+    private boolean isAdmin(Jwt jwt) {
         try {
-            String role = jwtUtil.extractRole(authHeader.substring(7));
-            return "ADMIN".equalsIgnoreCase(role);
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess == null)
+                return false;
+            List<?> roles = (List<?>) realmAccess.get("roles");
+            return roles != null && roles.contains("ADMIN");
         } catch (Exception e) {
             return false;
         }
