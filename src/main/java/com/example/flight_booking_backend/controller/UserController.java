@@ -19,6 +19,35 @@ public class UserController {
         this.userRepository = userRepository;
     }
 
+    @PostMapping("/sync")
+    public ResponseEntity<?> syncUser(@AuthenticationPrincipal Jwt jwt) {
+        String keycloakId = jwt.getSubject();
+        String email = jwt.getClaimAsString("email");
+        String name = jwt.getClaimAsString("name") != null
+                ? jwt.getClaimAsString("name")
+                : jwt.getClaimAsString("preferred_username");
+
+        Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+        String role = "USER";
+        if (realmAccess != null) {
+            java.util.List<?> roles = (java.util.List<?>) realmAccess.get("roles");
+            if (roles != null && roles.contains("ADMIN"))
+                role = "ADMIN";
+        }
+
+        final String resolvedRole = role;
+
+        userRepository.findByKeycloakId(keycloakId).ifPresentOrElse(
+                existing -> {
+                    existing.setEmail(email);
+                    existing.setName(name);
+                    userRepository.save(existing);
+                },
+                () -> userRepository.save(new User(name, email, keycloakId, resolvedRole)));
+
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/me")
     public ResponseEntity<?> getProfile(@AuthenticationPrincipal Jwt jwt) {
         String email = jwt.getClaimAsString("email");
@@ -44,9 +73,8 @@ public class UserController {
             return ResponseEntity.status(401).body("Unauthorized");
 
         String newName = body.get("name");
-        if (newName != null && !newName.isBlank()) {
+        if (newName != null && !newName.isBlank())
             user.setName(newName.trim());
-        }
 
         userRepository.save(user);
 
