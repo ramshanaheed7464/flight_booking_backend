@@ -2,8 +2,6 @@ package com.example.flight_booking_backend.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -19,15 +17,10 @@ public class User {
     @Column(unique = true)
     private String email;
 
-    private String password;
+    @Column(unique = true)
+    private String keycloakId; // Keycloak's UUID for this user
 
     private String role;
-
-    private boolean verified = false;
-
-    private String verificationCode;
-
-    private LocalDateTime verificationExpiry;
 
     @OneToMany(mappedBy = "user")
     @JsonIgnore
@@ -36,10 +29,10 @@ public class User {
     public User() {
     }
 
-    public User(String name, String email, String password, String role) {
+    public User(String name, String email, String keycloakId, String role) {
         this.name = name;
         this.email = email;
-        this.password = password;
+        this.keycloakId = keycloakId;
         this.role = role;
     }
 
@@ -67,12 +60,12 @@ public class User {
         this.email = email;
     }
 
-    public String getPassword() {
-        return password;
+    public String getKeycloakId() {
+        return keycloakId;
     }
 
-    public void setPassword(String password) {
-        this.password = password;
+    public void setKeycloakId(String keycloakId) {
+        this.keycloakId = keycloakId;
     }
 
     public String getRole() {
@@ -83,27 +76,11 @@ public class User {
         this.role = role;
     }
 
-    public boolean isVerified() {
-        return verified;
+    public List<Booking> getBookings() {
+        return bookings;
     }
 
-    public void setVerified(boolean verified) {
-        this.verified = verified;
-    }
-
-    public String getVerificationCode() {
-        return verificationCode;
-    }
-
-    public void setVerificationCode(String code) {
-        this.verificationCode = code;
-    }
-
-    public LocalDateTime getVerificationExpiry() {
-        return verificationExpiry;
-    }
-
-    public void setVerificationExpiry(LocalDateTime t) {
-        this.verificationExpiry = t;
+    public void setBookings(List<Booking> bookings) {
+        this.bookings = bookings;
     }
 }
