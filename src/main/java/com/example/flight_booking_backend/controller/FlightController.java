@@ -93,7 +93,7 @@ public class FlightController {
             if (realmAccess == null)
                 return false;
             List<?> roles = (List<?>) realmAccess.get("roles");
-            return roles != null && roles.contains("ADMIN");
+            return roles != null && (roles.contains("ADMIN") || roles.contains("admin"));
         } catch (Exception e) {
             return false;
         }

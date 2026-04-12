@@ -31,7 +31,7 @@ public class UserController {
         String role = "USER";
         if (realmAccess != null) {
             java.util.List<?> roles = (java.util.List<?>) realmAccess.get("roles");
-            if (roles != null && roles.contains("ADMIN"))
+            if (roles != null && (roles.contains("ADMIN") || roles.contains("admin")))
                 role = "ADMIN";
         }
 
