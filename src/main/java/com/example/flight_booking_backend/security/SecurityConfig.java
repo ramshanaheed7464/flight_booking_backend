@@ -1,5 +1,6 @@
 package com.example.flight_booking_backend.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,6 +18,9 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
+        @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+        private String jwkSetUri;
+
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
                 http
@@ -33,8 +37,7 @@ public class SecurityConfig {
                                                 .requestMatchers(HttpMethod.POST, "/api/user/sync").authenticated()
                                                 .anyRequest().authenticated())
                                 .oauth2ResourceServer(oauth2 -> oauth2
-                                                .jwt(jwt -> jwt.jwkSetUri(
-                                                                "${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")));
+                                                .jwt(jwt -> jwt.jwkSetUri(jwkSetUri)));
 
                 return http.build();
         }
