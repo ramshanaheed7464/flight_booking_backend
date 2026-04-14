@@ -25,7 +25,6 @@ public class KeycloakAdminService {
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
-    // Get admin access token
     private String getAdminToken() throws Exception {
         String body = "grant_type=client_credentials" +
                 "&client_id=" + clientId +
@@ -40,13 +39,11 @@ public class KeycloakAdminService {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         String responseBody = response.body();
 
-        // Extract access_token from response
         int start = responseBody.indexOf("\"access_token\":\"") + 16;
         int end = responseBody.indexOf("\"", start);
         return responseBody.substring(start, end);
     }
 
-    // Get Keycloak user ID by email
     private String getUserId(String adminToken, String email) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(keycloakUrl + "/admin/realms/" + realm + "/users?email=" + email + "&exact=true"))
@@ -57,13 +54,11 @@ public class KeycloakAdminService {
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         String responseBody = response.body();
 
-        // Extract id from first user in array
         int start = responseBody.indexOf("\"id\":\"") + 6;
         int end = responseBody.indexOf("\"", start);
         return responseBody.substring(start, end);
     }
 
-    // Update password in Keycloak
     public void updatePassword(String email, String newPassword) throws Exception {
         String adminToken = getAdminToken();
         String userId = getUserId(adminToken, email);
@@ -87,5 +82,25 @@ public class KeycloakAdminService {
         if (response.statusCode() >= 400) {
             throw new Exception("Keycloak password update failed: " + response.body());
         }
+    }
+
+    public void verifyAndUpdatePassword(String email, String currentPassword, String newPassword) throws Exception {
+        String verifyBody = "grant_type=password" +
+                "&client_id=" + clientId +
+                "&client_secret=" + clientSecret +
+                "&username=" + email +
+                "&password=" + currentPassword;
+        HttpRequest verifyRequest = HttpRequest.newBuilder()
+                .uri(URI.create(keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(verifyBody))
+                .build();
+        HttpResponse<String> verifyResponse = httpClient.send(verifyRequest, HttpResponse.BodyHandlers.ofString());
+
+        if (verifyResponse.statusCode() != 200) {
+            throw new Exception("Current password is incorrect");
+        }
+
+        updatePassword(email, newPassword);
     }
 }

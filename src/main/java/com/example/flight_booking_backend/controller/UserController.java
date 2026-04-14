@@ -2,6 +2,8 @@ package com.example.flight_booking_backend.controller;
 
 import com.example.flight_booking_backend.model.User;
 import com.example.flight_booking_backend.repository.UserRepository;
+import com.example.flight_booking_backend.service.KeycloakAdminService;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -14,9 +16,11 @@ import java.util.Map;
 public class UserController {
 
     private final UserRepository userRepository;
+    private final KeycloakAdminService keycloakAdminService;
 
-    public UserController(UserRepository userRepository) {
+    public UserController(UserRepository userRepository, KeycloakAdminService keycloakAdminService) {
         this.userRepository = userRepository;
+        this.keycloakAdminService = keycloakAdminService;
     }
 
     @PostMapping("/sync")
@@ -60,6 +64,28 @@ public class UserController {
                 "name", user.getName(),
                 "email", user.getEmail(),
                 "role", user.getRole()));
+    }
+
+    @PutMapping("/me/password")
+    public ResponseEntity<?> changePassword(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody Map<String, String> body) {
+        String email = jwt.getClaimAsString("email");
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        String currentPassword = body.get("currentPassword");
+        String newPassword = body.get("newPassword");
+
+        if (currentPassword == null || newPassword == null)
+            return ResponseEntity.badRequest().body("Current and New Passwords are required");
+        try {
+            keycloakAdminService.verifyAndUpdatePassword(email, currentPassword, newPassword);
+            return ResponseEntity.ok("Password changed successfully");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @PutMapping("/me")

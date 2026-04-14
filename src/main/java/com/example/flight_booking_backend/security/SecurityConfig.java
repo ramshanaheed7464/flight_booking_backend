@@ -30,7 +30,9 @@ public class SecurityConfig {
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers(HttpMethod.GET, "/api/flights/**").permitAll()
                                                 .requestMatchers(HttpMethod.GET, "/api/locations/cities").permitAll()
-                                                .requestMatchers(HttpMethod.GET, "/api/booking-options/nationalities")
+                                                .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password")
+                                                .permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/auth/reset-password")
                                                 .permitAll()
                                                 .requestMatchers(HttpMethod.GET, "/api/booking-options/meals")
                                                 .permitAll()

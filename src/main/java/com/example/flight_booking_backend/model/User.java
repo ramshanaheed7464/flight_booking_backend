@@ -18,7 +18,7 @@ public class User {
     private String email;
 
     @Column(unique = true)
-    private String keycloakId; // Keycloak's UUID for this user
+    private String keycloakId;
 
     private String role;
 
