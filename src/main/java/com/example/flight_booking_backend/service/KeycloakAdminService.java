@@ -93,6 +93,10 @@ public class KeycloakAdminService {
                 "&client_secret=" + clientSecret +
                 "&username=" + email +
                 "&password=" + currentPassword;
+        String tokenUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token";
+        System.out.println("Token URL: " + tokenUrl);
+        System.out.println("Client ID: " + frontendClientId);
+        System.out.println("Email: " + email);
         HttpRequest verifyRequest = HttpRequest.newBuilder()
                 .uri(URI.create(keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
