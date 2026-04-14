@@ -20,6 +20,9 @@ public class KeycloakAdminService {
     @Value("${keycloak.admin.client-id}")
     private String clientId;
 
+    @Value("${keycloak.frontend.client-id}")
+    private String frontendClientId;
+
     @Value("${keycloak.admin.client-secret}")
     private String clientSecret;
 
@@ -86,7 +89,7 @@ public class KeycloakAdminService {
 
     public void verifyAndUpdatePassword(String email, String currentPassword, String newPassword) throws Exception {
         String verifyBody = "grant_type=password" +
-                "&client_id=" + clientId +
+                "&client_id=" + frontendClientId +
                 "&client_secret=" + clientSecret +
                 "&username=" + email +
                 "&password=" + currentPassword;
@@ -96,7 +99,8 @@ public class KeycloakAdminService {
                 .POST(HttpRequest.BodyPublishers.ofString(verifyBody))
                 .build();
         HttpResponse<String> verifyResponse = httpClient.send(verifyRequest, HttpResponse.BodyHandlers.ofString());
-
+        System.out.println("Verify response status: " + verifyResponse.statusCode());
+        System.out.println("Verify response body: " + verifyResponse.body());
         if (verifyResponse.statusCode() != 200) {
             throw new Exception("Current password is incorrect");
         }
