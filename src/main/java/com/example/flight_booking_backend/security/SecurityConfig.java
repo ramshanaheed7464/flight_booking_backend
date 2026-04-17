@@ -4,10 +4,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -28,20 +30,20 @@ public class SecurityConfig {
                                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(auth -> auth
-                                                .requestMatchers(HttpMethod.GET, "/api/flights/**").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/flights", "/api/flights/**").permitAll()
                                                 .requestMatchers(HttpMethod.GET, "/api/duffel/flights").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/duffel/offers/**").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/duffel/validate/passport").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/duffel/bookings").authenticated()
                                                 .requestMatchers(HttpMethod.POST, "/api/bookings/duffel").authenticated()
                                                 .requestMatchers(HttpMethod.GET, "/api/locations/cities").permitAll()
-                                                .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password")
-                                                .permitAll()
-                                                .requestMatchers(HttpMethod.POST, "/api/auth/reset-password")
-                                                .permitAll()
-                                                .requestMatchers(HttpMethod.GET, "/api/booking-options/meals")
-                                                .permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/booking-options/meals").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/user/sync").authenticated()
                                                 .anyRequest().authenticated())
+                                .exceptionHandling(ex -> ex
+                                                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                                 .oauth2ResourceServer(oauth2 -> oauth2
                                                 .jwt(jwt -> jwt.jwkSetUri(jwkSetUri)));
 
@@ -56,7 +58,7 @@ public class SecurityConfig {
                                 "http://localhost:5173",
                                 "https://flight-booking-frontend-hgml.vercel.app"));
                 config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-                config.setAllowedHeaders(List.of("*"));
+                config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
                 config.setAllowCredentials(true);
                 UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
                 source.registerCorsConfiguration("/**", config);
