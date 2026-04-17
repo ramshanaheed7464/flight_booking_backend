@@ -1,12 +1,16 @@
 package com.example.flight_booking_backend.service;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 
 @Service
 public class KeycloakAdminService {
@@ -30,8 +34,8 @@ public class KeycloakAdminService {
 
     private String getAdminToken() throws Exception {
         String body = "grant_type=client_credentials" +
-                "&client_id=" + clientId +
-                "&client_secret=" + clientSecret;
+                "&client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8) +
+                "&client_secret=" + URLEncoder.encode(clientSecret, StandardCharsets.UTF_8);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token"))
@@ -40,39 +44,44 @@ public class KeycloakAdminService {
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        String responseBody = response.body();
-
-        int start = responseBody.indexOf("\"access_token\":\"") + 16;
-        int end = responseBody.indexOf("\"", start);
-        return responseBody.substring(start, end);
+        if (response.statusCode() != 200) {
+            throw new Exception("Failed to obtain admin token: " + response.body());
+        }
+        return new JSONObject(response.body()).getString("access_token");
     }
 
     private String getUserId(String adminToken, String email) throws Exception {
+        String encodedEmail = URLEncoder.encode(email, StandardCharsets.UTF_8);
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(keycloakUrl + "/admin/realms/" + realm + "/users?email=" + email + "&exact=true"))
+                .uri(URI.create(keycloakUrl + "/admin/realms/" + realm + "/users?email=" + encodedEmail + "&exact=true"))
                 .header("Authorization", "Bearer " + adminToken)
                 .GET()
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        String responseBody = response.body();
-
-        int start = responseBody.indexOf("\"id\":\"") + 6;
-        int end = responseBody.indexOf("\"", start);
-        return responseBody.substring(start, end);
+        if (response.statusCode() != 200) {
+            throw new Exception("Failed to look up user in Keycloak: " + response.body());
+        }
+        JSONArray users = new JSONArray(response.body());
+        if (users.length() == 0) {
+            throw new Exception("User not found in Keycloak: " + email);
+        }
+        return users.getJSONObject(0).getString("id");
     }
 
     public void updatePassword(String email, String newPassword) throws Exception {
         String adminToken = getAdminToken();
         String userId = getUserId(adminToken, email);
 
+        // Escape backslash first, then double-quote, to produce valid JSON
+        String safePassword = newPassword.replace("\\", "\\\\").replace("\"", "\\\"");
         String body = """
                 {
                     "type": "password",
                     "value": "%s",
                     "temporary": false
                 }
-                """.formatted(newPassword.replace("\"", "\\\""));
+                """.formatted(safePassword);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(keycloakUrl + "/admin/realms/" + realm + "/users/" + userId + "/reset-password"))
@@ -89,22 +98,18 @@ public class KeycloakAdminService {
 
     public void verifyAndUpdatePassword(String email, String currentPassword, String newPassword) throws Exception {
         String verifyBody = "grant_type=password" +
-                "&client_id=" + frontendClientId +
-                "&client_secret=" + clientSecret +
-                "&username=" + email +
-                "&password=" + currentPassword;
-        String tokenUrl = keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token";
-        System.out.println("Token URL: " + tokenUrl);
-        System.out.println("Client ID: " + frontendClientId);
-        System.out.println("Email: " + email);
+                "&client_id=" + URLEncoder.encode(frontendClientId, StandardCharsets.UTF_8) +
+                "&client_secret=" + URLEncoder.encode(clientSecret, StandardCharsets.UTF_8) +
+                "&username=" + URLEncoder.encode(email, StandardCharsets.UTF_8) +
+                "&password=" + URLEncoder.encode(currentPassword, StandardCharsets.UTF_8);
+
         HttpRequest verifyRequest = HttpRequest.newBuilder()
                 .uri(URI.create(keycloakUrl + "/realms/" + realm + "/protocol/openid-connect/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(verifyBody))
                 .build();
+
         HttpResponse<String> verifyResponse = httpClient.send(verifyRequest, HttpResponse.BodyHandlers.ofString());
-        System.out.println("Verify response status: " + verifyResponse.statusCode());
-        System.out.println("Verify response body: " + verifyResponse.body());
         if (verifyResponse.statusCode() != 200) {
             throw new Exception("Current password is incorrect");
         }

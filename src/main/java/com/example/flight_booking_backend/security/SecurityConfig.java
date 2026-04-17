@@ -29,6 +29,10 @@ public class SecurityConfig {
                                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers(HttpMethod.GET, "/api/flights/**").permitAll()
+                                                .requestMatchers(HttpMethod.GET, "/api/duffel/flights").permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/duffel/validate/passport").permitAll()
+                                                .requestMatchers(HttpMethod.POST, "/api/duffel/bookings").authenticated()
+                                                .requestMatchers(HttpMethod.POST, "/api/bookings/duffel").authenticated()
                                                 .requestMatchers(HttpMethod.GET, "/api/locations/cities").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password")
                                                 .permitAll()

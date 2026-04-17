@@ -1,6 +1,7 @@
 package com.example.flight_booking_backend.service;
 
 import com.example.flight_booking_backend.model.Booking;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
@@ -9,7 +10,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 import static com.example.flight_booking_backend.email.EmailComponents.*;
 import static com.example.flight_booking_backend.email.EmailPalette.*;
@@ -78,11 +81,9 @@ public class EmailService {
     }
 
     @Async
-    public void sendResetEmail(String toEmail, String token) {
-        String link = "https://flight-booking-frontend-hgml.vercel.app/reset-password?token=" + token;
-        String html = "<p>Click the link to reset your password:</p><a href='" + link + "'>" + link + "</a>";
+    public void sendResetEmail(String toEmail, String resetLink) {
+        String html = "<p>Click the link to reset your password:</p><a href='" + resetLink + "'>" + resetLink + "</a>";
         sendEmail(toEmail, IC_PLANE + " Password Reset Request", html);
-        System.out.println("Password reset email sent to: " + toEmail);
     }
 
     @Async
@@ -109,6 +110,43 @@ public class EmailService {
                 subject,
                 html);
         System.out.println("Round trip confirmation email sent to: " + outbound.getUser().getEmail());
+    }
+
+    /**
+     * Sends a booking confirmation to one passenger using the structured fields
+     * recorded by the frontend (fire-and-forget flow via POST /api/bookings/duffel).
+     */
+    @Async
+    public void sendDuffelRecordConfirmation(String toEmail, String passengerName,
+                                              String bookingRef, String origin, String destination,
+                                              String departureAt, String carrier) {
+        try {
+            String subject = IC_PLANE + " Booking Confirmed — Ref: " + bookingRef;
+            String html = buildDuffelRecordHtml(passengerName, bookingRef, origin, destination, departureAt, carrier);
+            sendEmail(toEmail, subject, html);
+            System.out.println("Duffel record confirmation sent to: " + toEmail);
+        } catch (Exception e) {
+            System.err.println("Failed to send Duffel record confirmation: " + e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendDuffelBookingConfirmation(String toEmail, String userName, String duffelOrderJson) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode order = mapper.readTree(duffelOrderJson).path("data");
+
+            String bookingRef = order.path("booking_reference").asString("N/A");
+            String totalAmount = order.path("total_amount").asString("N/A");
+            String totalCurrency = order.path("total_currency").asString("");
+
+            String subject = IC_PLANE + " Booking Confirmed — Ref: " + bookingRef;
+            String html = buildDuffelBookingHtml(userName, bookingRef, totalAmount, totalCurrency, order);
+            sendEmail(toEmail, subject, html);
+            System.out.println("Duffel booking confirmation sent to: " + toEmail);
+        } catch (Exception e) {
+            System.err.println("Failed to send Duffel booking confirmation: " + e.getMessage());
+        }
     }
 
     // ── HTML builders ───────────────────────────────────────────────────────
@@ -147,15 +185,15 @@ public class EmailService {
         var flight = booking.getFlight();
         var user = booking.getUser();
 
-        String departure = fmt(flight.getDepartureTime() != null
+        String departure = flight.getDepartureTime() != null
                 ? flight.getDepartureTime().format(FORMATTER)
-                : "N/A");
-        String arrival = fmt(flight.getArrivalTime() != null
+                : "N/A";
+        String arrival = flight.getArrivalTime() != null
                 ? flight.getArrivalTime().format(FORMATTER)
-                : "N/A");
-        String bookedOn = fmt(booking.getBookingTime() != null
+                : "N/A";
+        String bookedOn = booking.getBookingTime() != null
                 ? booking.getBookingTime().format(FORMATTER)
-                : "N/A");
+                : "N/A";
 
         double totalPrice = flight.getPrice() * booking.getPassengers();
 
@@ -188,9 +226,9 @@ public class EmailService {
         var retFlight = returnBooking.getFlight();
 
         double totalPrice = (outFlight.getPrice() + retFlight.getPrice()) * outbound.getPassengers();
-        String bookedOn = fmt(outbound.getBookingTime() != null
+        String bookedOn = outbound.getBookingTime() != null
                 ? outbound.getBookingTime().format(FORMATTER)
-                : "N/A");
+                : "N/A";
 
         String body = header("Round Trip Confirmed", "Both flights have been successfully booked") +
                 greeting(user.getName(), "Your round trip is confirmed. Here are the details for both flights.") +
@@ -207,30 +245,140 @@ public class EmailService {
                 sectionTitle(IC_PLANE + " Outbound Flight &mdash; Booking #" + outbound.getId()) +
                 "<table style='width:100%;border-collapse:collapse;'>" +
                 flightRows(outFlight,
-                        fmt(outFlight.getDepartureTime() != null
+                        outFlight.getDepartureTime() != null
                                 ? outFlight.getDepartureTime().format(FORMATTER)
-                                : "N/A"),
-                        fmt(outFlight.getArrivalTime() != null
+                                : "N/A",
+                        outFlight.getArrivalTime() != null
                                 ? outFlight.getArrivalTime().format(FORMATTER)
-                                : "N/A"))
+                                : "N/A")
                 + "</table></div>" +
 
                 "<div style='padding:20px 32px 0;'>" +
                 sectionTitle("&#8617; Return Flight &mdash; Booking #" + returnBooking.getId()) +
                 "<table style='width:100%;border-collapse:collapse;'>" +
                 flightRows(retFlight,
-                        fmt(retFlight.getDepartureTime() != null
+                        retFlight.getDepartureTime() != null
                                 ? retFlight.getDepartureTime().format(FORMATTER)
-                                : "N/A"),
-                        fmt(retFlight.getArrivalTime() != null
+                                : "N/A",
+                        retFlight.getArrivalTime() != null
                                 ? retFlight.getArrivalTime().format(FORMATTER)
-                                : "N/A"))
+                                : "N/A")
                 + "</table></div>" +
 
                 buildPassengerSection(outbound.getPassengerDetails()) +
                 footer();
 
         return wrapper(body);
+    }
+
+    private String buildDuffelRecordHtml(String passengerName, String bookingRef,
+                                          String origin, String destination,
+                                          String departureAt, String carrier) {
+        DateTimeFormatter duffelFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+        DateTimeFormatter displayFmt = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy  hh:mm a");
+        String depDisplay = formatDuffelDateTime(departureAt, duffelFmt, displayFmt);
+
+        String body = header("Booking Confirmed", "Your flight has been successfully booked") +
+                greeting(passengerName, "Your booking is confirmed. Here is your trip summary.") +
+                "<div style='padding:20px 32px 0;'>" +
+                sectionTitle("Booking Summary") +
+                "<table style='width:100%;border-collapse:collapse;'>" +
+                row(IC_HASH,     "Booking Reference", bookingRef,  true)  +
+                row(IC_PLANE,    "Airline",            carrier,     false) +
+                row(IC_FROM,     "From",               origin,      true)  +
+                row(IC_TO,       "To",                 destination, false) +
+                row(IC_CLOCK,    "Departure",          depDisplay,  true)  +
+                "</table></div>" +
+                footer();
+
+        return wrapper(body);
+    }
+
+    private String buildDuffelBookingHtml(String userName, String bookingRef,
+                                           String totalAmount, String totalCurrency,
+                                           JsonNode order) {
+        DateTimeFormatter duffelFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+        DateTimeFormatter displayFmt = DateTimeFormatter.ofPattern("EEE, dd MMM yyyy  hh:mm a");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(header("Booking Confirmed", "Your flight has been successfully booked"));
+        sb.append(greeting(userName, "Your booking is confirmed. Here is your complete trip summary."));
+
+        sb.append("<div style='padding:20px 32px 0;'>")
+                .append(sectionTitle("Booking Summary"))
+                .append("<table style='width:100%;border-collapse:collapse;'>")
+                .append(row(IC_HASH, "Booking Reference", bookingRef, true))
+                .append(row(IC_MONEY, "Total Price", totalCurrency + " " + totalAmount, false))
+                .append("</table></div>");
+
+        // Flight slices
+        JsonNode slices = order.path("slices");
+        for (int s = 0; s < slices.size(); s++) {
+            String sliceLabel = slices.size() > 1 ? (s == 0 ? " &mdash; Outbound" : " &mdash; Return") : "";
+            JsonNode segments = slices.get(s).path("segments");
+            for (int seg = 0; seg < segments.size(); seg++) {
+                JsonNode segment = segments.get(seg);
+                String origin = segment.path("origin").path("iata_code").asString("N/A");
+                String dest = segment.path("destination").path("iata_code").asString("N/A");
+                String carrier = segment.path("operating_carrier").path("name").asString("N/A");
+                String carrierCode = segment.path("operating_carrier").path("iata_code").asString("");
+                String flightNum = segment.path("operating_carrier_flight_number").asString("");
+                String flightDisplay = carrier + (!flightNum.isBlank() ? " (" + carrierCode + flightNum + ")" : "");
+
+                String dep = formatDuffelDateTime(segment.path("departing_at").asString(""), duffelFmt, displayFmt);
+                String arr = formatDuffelDateTime(segment.path("arriving_at").asString(""), duffelFmt, displayFmt);
+
+                sb.append("<div style='padding:20px 32px 0;'>")
+                        .append(sectionTitle(IC_PLANE + " Flight" + sliceLabel))
+                        .append("<table style='width:100%;border-collapse:collapse;'>")
+                        .append(row(IC_PLANE, "Airline", flightDisplay, true))
+                        .append(row(IC_FROM, "From", origin, false))
+                        .append(row(IC_TO, "To", dest, true))
+                        .append(row(IC_CLOCK, "Departs", dep, false))
+                        .append(row(IC_CLOCK, "Arrives", arr, true))
+                        .append("</table></div>");
+            }
+        }
+
+        // Passengers from Duffel order
+        JsonNode passengers = order.path("passengers");
+        if (passengers.isArray() && passengers.size() > 0) {
+            sb.append("<div style='padding:20px 32px 0;'>").append(sectionTitle("Passenger Details"));
+            for (int i = 0; i < passengers.size(); i++) {
+                JsonNode p = passengers.get(i);
+                String fullName = (p.path("given_name").asString("") + " " + p.path("family_name").asString("")).trim();
+                String bornOn = p.path("born_on").asString("");
+                String gender = p.path("gender").asString("").toUpperCase();
+                sb.append("<div style='background:" + CARD + ";border:1px solid " + BORDER + ";" +
+                        "border-radius:8px;padding:16px;margin-top:12px;'>")
+                        .append("<div style='display:flex;align-items:center;margin-bottom:12px;" +
+                                "padding-bottom:10px;border-bottom:1px solid " + BORDER + ";'>" +
+                                "<span style='font-size:18px;margin-right:8px;'>" + IC_USERS + "</span>" +
+                                "<span style='color:" + GOLD + ";font-weight:700;font-size:13px;" +
+                                "text-transform:uppercase;letter-spacing:1px;'>Passenger " + (i + 1) + "</span></div>")
+                        .append("<table style='width:100%;border-collapse:collapse;font-size:13px;'>")
+                        .append(miniRow(IC_PERSON, "Full Name", fullName))
+                        .append(miniRow(IC_CAKE, "Date of Birth", bornOn))
+                        .append(miniRow(IC_GENDER, "Gender", gender))
+                        .append("</table></div>");
+            }
+            sb.append("</div>");
+        }
+
+        sb.append(footer());
+        return wrapper(sb.toString());
+    }
+
+    private String formatDuffelDateTime(String raw, DateTimeFormatter parser, DateTimeFormatter display) {
+        if (raw == null || raw.isBlank()) return "N/A";
+        try {
+            // Duffel returns ISO-8601 with offset; strip offset if present
+            String trimmed = raw.contains("+") ? raw.substring(0, raw.lastIndexOf('+')) : raw;
+            if (trimmed.contains("Z")) trimmed = trimmed.replace("Z", "");
+            return LocalDateTime.parse(trimmed, parser).format(display);
+        } catch (DateTimeParseException e) {
+            return raw;
+        }
     }
 
     private String buildPassengerSection(String passengerDetailsJson) {
@@ -279,7 +427,4 @@ public class EmailService {
         }
     }
 
-    private static String fmt(String s) {
-        return s;
-    }
 }

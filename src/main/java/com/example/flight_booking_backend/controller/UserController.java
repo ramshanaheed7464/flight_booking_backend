@@ -44,7 +44,9 @@ public class UserController {
         userRepository.findByKeycloakId(keycloakId).ifPresentOrElse(
                 existing -> {
                     existing.setEmail(email);
-                    existing.setName(name);
+                    if (existing.getName() == null || existing.getName().isBlank()) {
+                        existing.setName(name);
+                    }
                     userRepository.save(existing);
                 },
                 () -> userRepository.save(new User(name, email, keycloakId, resolvedRole)));
@@ -57,7 +59,7 @@ public class UserController {
         String email = jwt.getClaimAsString("email");
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
-            return ResponseEntity.status(401).body("Unauthorized");
+            return ResponseEntity.status(404).body("User profile not found. Please sync your account.");
 
         return ResponseEntity.ok(Map.of(
                 "id", user.getId(),
@@ -73,7 +75,7 @@ public class UserController {
         String email = jwt.getClaimAsString("email");
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
-            return ResponseEntity.status(401).body("Unauthorized");
+            return ResponseEntity.status(404).body("User profile not found. Please sync your account.");
         }
         String currentPassword = body.get("currentPassword");
         String newPassword = body.get("newPassword");
@@ -96,7 +98,7 @@ public class UserController {
         String email = jwt.getClaimAsString("email");
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
-            return ResponseEntity.status(401).body("Unauthorized");
+            return ResponseEntity.status(404).body("User profile not found. Please sync your account.");
 
         String newName = body.get("name");
         if (newName != null && !newName.isBlank())
