@@ -44,7 +44,7 @@ public class UserController {
         userRepository.findByKeycloakId(keycloakId).ifPresentOrElse(
                 existing -> {
                     existing.setEmail(email);
-                    if (existing.getName() == null || existing.getName().isBlank()) {
+                    if (name != null && !name.isBlank()) {
                         existing.setName(name);
                     }
                     userRepository.save(existing);

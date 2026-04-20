@@ -193,7 +193,11 @@ public class BookingController {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
-        return ResponseEntity.ok(bookingRepository.findByUserId(user.getId()));
+
+        List<Object> all = new java.util.ArrayList<>();
+        all.addAll(bookingRepository.findByUserId(user.getId()));
+        all.addAll(duffelBookingRepository.findByUserEmailOrderByCreatedAtDesc(email));
+        return ResponseEntity.ok(all);
     }
 
     @PutMapping("/{id}/cancel")
@@ -205,6 +209,18 @@ public class BookingController {
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
+
+        // Check Duffel bookings first (they share no table with Booking)
+        var duffelBooking = duffelBookingRepository.findById(id).orElse(null);
+        if (duffelBooking != null) {
+            if (!email.equals(duffelBooking.getUserEmail()))
+                return ResponseEntity.status(403).body("Access denied");
+            if ("CANCELLED".equals(duffelBooking.getStatus()))
+                return ResponseEntity.badRequest().body("Already cancelled");
+            duffelBooking.setStatus("CANCELLED");
+            duffelBookingRepository.save(duffelBooking);
+            return ResponseEntity.ok("Booking cancelled");
+        }
 
         Booking booking = bookingRepository.findById(id).orElse(null);
         if (booking == null)

@@ -90,12 +90,13 @@ public class EmailService {
     public void sendBookingConfirmation(Booking booking) {
         String subject = IC_PLANE + " Booking Confirmed — Flight " + booking.getFlight().getFlightNumber();
         String html = buildOneWayHtml(booking);
+        String accountEmail = booking.getUser().getEmail();
 
-        sendEmail(
-                booking.getUser().getEmail(),
-                subject,
-                html);
-        System.out.println("Booking confirmation email sent to: " + booking.getUser().getEmail());
+        boolean sentToPassenger = sendToPassengerEmails(booking.getPassengerDetails(), subject, html);
+        if (!sentToPassenger) {
+            sendEmail(accountEmail, subject, html);
+            System.out.println("Booking confirmation email sent to: " + accountEmail);
+        }
     }
 
     @Async
@@ -104,12 +105,36 @@ public class EmailService {
                 + outbound.getFlight().getFlightNumber()
                 + " & " + returnBooking.getFlight().getFlightNumber();
         String html = buildRoundTripHtml(outbound, returnBooking);
+        String accountEmail = outbound.getUser().getEmail();
 
-        sendEmail(
-                outbound.getUser().getEmail(),
-                subject,
-                html);
-        System.out.println("Round trip confirmation email sent to: " + outbound.getUser().getEmail());
+        boolean sentToPassenger = sendToPassengerEmails(outbound.getPassengerDetails(), subject, html);
+        if (!sentToPassenger) {
+            sendEmail(accountEmail, subject, html);
+            System.out.println("Round trip confirmation email sent to: " + accountEmail);
+        }
+    }
+
+    /** Sends to every passenger email found in the JSON. Returns true if at least one was sent. */
+    private boolean sendToPassengerEmails(String passengerDetailsJson, String subject, String html) {
+        if (passengerDetailsJson == null || passengerDetailsJson.isBlank()) return false;
+        boolean sent = false;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode passengers = mapper.readTree(passengerDetailsJson);
+            if (!passengers.isArray()) return false;
+
+            for (JsonNode p : passengers) {
+                String passengerEmail = p.path("email").asString("").trim();
+                if (!passengerEmail.isBlank()) {
+                    sendEmail(passengerEmail, subject, html);
+                    System.out.println("Booking confirmation sent to passenger: " + passengerEmail);
+                    sent = true;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Could not parse passenger emails: " + e.getMessage());
+        }
+        return sent;
     }
 
     /**
@@ -396,6 +421,17 @@ public class EmailService {
 
             for (int i = 0; i < passengers.size(); i++) {
                 var p = passengers.get(i);
+
+                String fullName      = p.path("fullName").asString("").trim();
+                String email         = p.path("email").asString("").trim();
+                String passportNum   = p.path("passportNumber").asString("").trim();
+                String passportExp   = p.path("passportExpiry").asString("").trim();
+                String nationality   = p.path("nationality").asString("").trim();
+                String dob           = p.path("dateOfBirth").asString("").trim();
+                String gender        = p.path("gender").asString("").trim();
+                String phone         = p.path("phone").asString("").trim();
+                String meal          = p.path("mealPreference").asString("").trim();
+
                 sb.append(
                         "<div style='background:" + CARD + ";border:1px solid " + BORDER + ";" +
                                 "border-radius:8px;padding:16px;margin-top:12px;margin-bottom:4px;'>" +
@@ -407,15 +443,20 @@ public class EmailService {
                                 "text-transform:uppercase;letter-spacing:1px;'>Passenger " + (i + 1) + "</span>" +
                                 "</div>" +
 
-                                "<table style='width:100%;border-collapse:collapse;font-size:13px;'>" +
-                                miniRow(IC_PERSON, "Full Name", p.path("fullName").asString()) +
-                                miniRow(IC_PASSPORT, "Passport No.", p.path("passportNumber").asString()) +
-                                miniRow(IC_GLOBE, "Nationality", p.path("nationality").asString()) +
-                                miniRow(IC_CAKE, "Date of Birth", p.path("dateOfBirth").asString()) +
-                                miniRow(IC_GENDER, "Gender", p.path("gender").asString()) +
-                                miniRow(IC_PHONE, "Phone", p.path("phone").asString()) +
-                                miniRow(IC_MEAL, "Meal Preference", p.path("mealPreference").asString()) +
-                                "</table></div>");
+                                "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+                );
+
+                if (!fullName.isBlank())    sb.append(miniRow(IC_PERSON,   "Full Name",        fullName));
+                if (!email.isBlank())       sb.append(miniRow(IC_MAIL,     "Email",             email));
+                if (!passportNum.isBlank()) sb.append(miniRow(IC_PASSPORT, "Passport No.",      passportNum));
+                if (!passportExp.isBlank()) sb.append(miniRow(IC_CALENDAR, "Passport Expiry",   passportExp));
+                if (!nationality.isBlank()) sb.append(miniRow(IC_GLOBE,    "Nationality",        nationality));
+                if (!dob.isBlank())         sb.append(miniRow(IC_CAKE,     "Date of Birth",     dob));
+                if (!gender.isBlank())      sb.append(miniRow(IC_GENDER,   "Gender",             gender));
+                if (!phone.isBlank())       sb.append(miniRow(IC_PHONE,    "Phone",              phone));
+                if (!meal.isBlank())        sb.append(miniRow(IC_MEAL,     "Meal Preference",    meal));
+
+                sb.append("</table></div>");
             }
 
             sb.append("</div>");

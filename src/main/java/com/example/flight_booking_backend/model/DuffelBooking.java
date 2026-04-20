@@ -16,6 +16,10 @@ public class DuffelBooking {
     private String destination;
     private String departureAt;
     private String carrier;
+    private String flightNumber;
+    private String totalAmount;
+    private String currency;
+    private String status = "BOOKED";
 
     /** Email of the authenticated user who made the booking. */
     private String userEmail;
@@ -46,6 +50,18 @@ public class DuffelBooking {
 
     public String getCarrier() { return carrier; }
     public void setCarrier(String carrier) { this.carrier = carrier; }
+
+    public String getFlightNumber() { return flightNumber; }
+    public void setFlightNumber(String flightNumber) { this.flightNumber = flightNumber; }
+
+    public String getTotalAmount() { return totalAmount; }
+    public void setTotalAmount(String totalAmount) { this.totalAmount = totalAmount; }
+
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
     public String getUserEmail() { return userEmail; }
     public void setUserEmail(String userEmail) { this.userEmail = userEmail; }

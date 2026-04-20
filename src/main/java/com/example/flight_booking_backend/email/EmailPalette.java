@@ -32,4 +32,5 @@ public final class EmailPalette {
     public static final String IC_MEAL = "&#127860;";
     public static final String IC_USERS = "&#128101;";
     public static final String IC_GLOBE2 = "&#127757;";
+    public static final String IC_MAIL = "&#128231;";
 }

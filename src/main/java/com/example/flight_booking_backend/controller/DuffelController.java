@@ -1,5 +1,7 @@
 package com.example.flight_booking_backend.controller;
 
+import com.example.flight_booking_backend.model.DuffelBooking;
+import com.example.flight_booking_backend.repository.DuffelBookingRepository;
 import com.example.flight_booking_backend.service.DuffelService;
 import com.example.flight_booking_backend.service.EmailService;
 import org.springframework.http.MediaType;
@@ -7,7 +9,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -17,10 +22,15 @@ public class DuffelController {
 
     private final DuffelService duffelService;
     private final EmailService emailService;
+    private final DuffelBookingRepository duffelBookingRepository;
+    private final ObjectMapper objectMapper;
 
-    public DuffelController(DuffelService duffelService, EmailService emailService) {
+    public DuffelController(DuffelService duffelService, EmailService emailService,
+                            DuffelBookingRepository duffelBookingRepository, ObjectMapper objectMapper) {
         this.duffelService = duffelService;
         this.emailService = emailService;
+        this.duffelBookingRepository = duffelBookingRepository;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -131,14 +141,18 @@ public class DuffelController {
             String result = duffelService.createOrder(offerId, passengers);
 
             String userEmail = jwt.getClaimAsString("email");
-            String userName = jwt.getClaimAsString("name");
-            if (userName == null || userName.isBlank()) {
-                userName = jwt.getClaimAsString("given_name");
+
+            saveDuffelBooking(result, userEmail, passengers);
+
+            // Send confirmation to each passenger's email from the form
+            for (Map<String, Object> p : passengers) {
+                String passengerEmail = p.containsKey("email") ? p.get("email").toString() : null;
+                String passengerName  = p.containsKey("firstName") ? p.get("firstName").toString()
+                        : p.containsKey("given_name") ? p.get("given_name").toString() : "Traveller";
+                String toEmail = (passengerEmail != null && !passengerEmail.isBlank())
+                        ? passengerEmail : userEmail;
+                emailService.sendDuffelBookingConfirmation(toEmail, passengerName, result);
             }
-            emailService.sendDuffelBookingConfirmation(
-                    userEmail,
-                    userName != null ? userName : "Traveller",
-                    result);
 
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
@@ -176,5 +190,33 @@ public class DuffelController {
         return valid
                 ? ResponseEntity.ok(result)
                 : ResponseEntity.badRequest().body(result);
+    }
+
+    private void saveDuffelBooking(String orderJson, String userEmail,
+                                   List<Map<String, Object>> passengers) {
+        try {
+            JsonNode order = objectMapper.readTree(orderJson).path("data");
+            JsonNode firstSegment = order.path("slices").get(0).path("segments").get(0);
+            JsonNode lastSlice = order.path("slices").get(order.path("slices").size() - 1);
+            JsonNode lastSegment = lastSlice.path("segments")
+                    .get(lastSlice.path("segments").size() - 1);
+
+            DuffelBooking booking = new DuffelBooking();
+            booking.setBookingReference(order.path("booking_reference").asString(""));
+            booking.setOrigin(firstSegment.path("origin").path("iata_code").asString(""));
+            booking.setDestination(lastSegment.path("destination").path("iata_code").asString(""));
+            booking.setDepartureAt(firstSegment.path("departing_at").asString(""));
+            booking.setCarrier(firstSegment.path("operating_carrier").path("name").asString(""));
+            booking.setFlightNumber(firstSegment.path("operating_carrier_flight_number").asString(""));
+            booking.setTotalAmount(order.path("total_amount").asString(""));
+            booking.setCurrency(order.path("total_currency").asString(""));
+            booking.setUserEmail(userEmail);
+            booking.setCreatedAt(LocalDateTime.now());
+            booking.setPassengerDetailsJson(objectMapper.writeValueAsString(passengers));
+
+            duffelBookingRepository.save(booking);
+        } catch (Exception e) {
+            System.err.println("Failed to save Duffel booking to DB: " + e.getMessage());
+        }
     }
 }
