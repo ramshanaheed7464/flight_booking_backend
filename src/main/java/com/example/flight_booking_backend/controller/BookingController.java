@@ -114,26 +114,6 @@ public class BookingController {
         return ResponseEntity.ok("Flight booked successfully");
     }
 
-    /**
-     * Fire-and-forget endpoint called by the frontend after a successful Duffel order.
-     * Persists the booking record and sends a confirmation email to every passenger.
-     *
-     * POST /api/bookings/duffel
-     * Requires authentication.
-     *
-     * Body:
-     * {
-     *   "bookingReference": "ABCDEF",
-     *   "origin":           "LHR",
-     *   "destination":      "JFK",
-     *   "departure":        "2025-12-01T10:00:00",
-     *   "carrier":          "British Airways (BA123)",
-     *   "passengers": [
-     *     { "givenName": "Ali", "familyName": "Khan",
-     *       "email": "ali@example.com", "passportNumber": "AB1234567" }
-     *   ]
-     * }
-     */
     @PostMapping("/duffel")
     public ResponseEntity<?> recordDuffelBooking(
             @RequestBody Map<String, Object> body,
@@ -145,14 +125,13 @@ public class BookingController {
 
         try {
             String bookingRef = (String) body.get("bookingReference");
-            String origin     = (String) body.get("origin");
-            String dest       = (String) body.get("destination");
-            String departure  = (String) body.getOrDefault("departure", (String) body.get("departureAt"));
-            String carrier    = (String) body.get("carrier");
+            String origin = (String) body.get("origin");
+            String dest = (String) body.get("destination");
+            String departure = (String) body.getOrDefault("departure", (String) body.get("departureAt"));
+            String carrier = (String) body.get("carrier");
 
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> passengers =
-                    (List<Map<String, Object>>) body.get("passengers");
+            List<Map<String, Object>> passengers = (List<Map<String, Object>>) body.get("passengers");
 
             DuffelBooking record = new DuffelBooking();
             record.setBookingReference(bookingRef);
@@ -210,7 +189,6 @@ public class BookingController {
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
 
-        // Check regular (scheduled) bookings first so seat restoration always runs
         Booking booking = bookingRepository.findById(id).orElse(null);
         if (booking != null && booking.getUser().getId().equals(user.getId())) {
             if (booking.getStatus() == BookingStatus.CANCELLED)
@@ -244,7 +222,33 @@ public class BookingController {
     public ResponseEntity<?> getAllBookings(@AuthenticationPrincipal Jwt jwt) {
         if (!isAdmin(jwt))
             return ResponseEntity.status(403).body("Access denied: ADMIN role required");
-        return ResponseEntity.ok(bookingRepository.findAll());
+
+        List<Object> all = new java.util.ArrayList<>();
+        all.addAll(bookingRepository.findAll());
+
+        duffelBookingRepository.findAll().forEach(d -> {
+            User u = userRepository.findByEmail(d.getUserEmail()).orElse(null);
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("id", d.getId());
+            row.put("status", d.getStatus());
+            row.put("origin", d.getOrigin());
+            row.put("destination", d.getDestination());
+            row.put("flightNumber", d.getFlightNumber());
+            row.put("carrier", d.getCarrier());
+            row.put("departureAt", d.getDepartureAt());
+            row.put("arrivalAt", null);
+            row.put("bookingReference", d.getBookingReference());
+            row.put("duffelOrderId", d.getBookingReference());
+            row.put("totalAmount", d.getTotalAmount());
+            row.put("currency", d.getCurrency());
+            row.put("passengerDetails", d.getPassengerDetailsJson());
+            row.put("user", u == null
+                    ? Map.of("email", d.getUserEmail() != null ? d.getUserEmail() : "")
+                    : Map.of("id", u.getId(), "name", u.getName(), "email", u.getEmail()));
+            all.add(row);
+        });
+
+        return ResponseEntity.ok(all);
     }
 
     @PutMapping("/{id}/status")
@@ -299,7 +303,8 @@ public class BookingController {
     private String getFirst(Map<String, Object> map, String... keys) {
         for (String k : keys) {
             Object v = map.get(k);
-            if (v != null && !v.toString().isBlank()) return v.toString();
+            if (v != null && !v.toString().isBlank())
+                return v.toString();
         }
         return null;
     }
