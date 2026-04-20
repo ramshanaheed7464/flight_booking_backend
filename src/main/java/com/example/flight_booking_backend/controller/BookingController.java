@@ -210,7 +210,22 @@ public class BookingController {
         if (user == null)
             return ResponseEntity.status(401).body("User not found");
 
-        // Check Duffel bookings first (they share no table with Booking)
+        // Check regular (scheduled) bookings first so seat restoration always runs
+        Booking booking = bookingRepository.findById(id).orElse(null);
+        if (booking != null && booking.getUser().getId().equals(user.getId())) {
+            if (booking.getStatus() == BookingStatus.CANCELLED)
+                return ResponseEntity.badRequest().body("Already cancelled");
+
+            var flight = booking.getFlight();
+            flight.setSeatsAvailable(flight.getSeatsAvailable() + booking.getPassengers());
+            flightRepository.save(flight);
+
+            booking.setStatus(BookingStatus.CANCELLED);
+            bookingRepository.save(booking);
+            return ResponseEntity.ok("Booking cancelled");
+        }
+
+        // Fall back to Duffel bookings (no local seat count to restore)
         var duffelBooking = duffelBookingRepository.findById(id).orElse(null);
         if (duffelBooking != null) {
             if (!email.equals(duffelBooking.getUserEmail()))
@@ -222,21 +237,7 @@ public class BookingController {
             return ResponseEntity.ok("Booking cancelled");
         }
 
-        Booking booking = bookingRepository.findById(id).orElse(null);
-        if (booking == null)
-            return ResponseEntity.badRequest().body("Booking not found");
-        if (!booking.getUser().getId().equals(user.getId()))
-            return ResponseEntity.status(403).body("Access denied");
-        if (booking.getStatus() == BookingStatus.CANCELLED)
-            return ResponseEntity.badRequest().body("Already cancelled");
-
-        var flight = booking.getFlight();
-        flight.setSeatsAvailable(flight.getSeatsAvailable() + booking.getPassengers());
-        flightRepository.save(flight);
-
-        booking.setStatus(BookingStatus.CANCELLED);
-        bookingRepository.save(booking);
-        return ResponseEntity.ok("Booking cancelled");
+        return ResponseEntity.badRequest().body("Booking not found");
     }
 
     @GetMapping("/all")
