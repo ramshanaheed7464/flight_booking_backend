@@ -27,6 +27,9 @@ public class UserController {
     public ResponseEntity<?> syncUser(@AuthenticationPrincipal Jwt jwt) {
         String keycloakId = jwt.getSubject();
         String email = jwt.getClaimAsString("email");
+        if (email == null || email.isBlank())
+            return ResponseEntity.badRequest().body("JWT missing email claim");
+
         String name = jwt.getClaimAsString("name") != null
                 ? jwt.getClaimAsString("name")
                 : jwt.getClaimAsString("preferred_username");
@@ -49,7 +52,13 @@ public class UserController {
                     }
                     userRepository.save(existing);
                 },
-                () -> userRepository.save(new User(name, email, keycloakId, resolvedRole)));
+                () -> {
+                    // Fall back to email lookup — handles users registered before keycloakId was stored
+                    User user = userRepository.findByEmail(email).orElse(new User(name, email, keycloakId, resolvedRole));
+                    user.setKeycloakId(keycloakId);
+                    if (name != null && !name.isBlank()) user.setName(name);
+                    userRepository.save(user);
+                });
 
         return ResponseEntity.ok().build();
     }
